@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -39,17 +38,26 @@ export function useChatWithGemini(agentId: string) {
         return null;
       }
 
+      // Generate a proper UUID
+      const sessionId = crypto.randomUUID();
+
       const { data, error } = await supabase
         .from("chat_sessions")
         .insert({
+          id: sessionId,
           agent_id: agentId,
           user_id: user.id,
-          title
+          title,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error creating chat session:", error);
+        throw error;
+      }
       return data.id;
     } catch (error: any) {
       toast({
@@ -63,8 +71,18 @@ export function useChatWithGemini(agentId: string) {
 
   const loadSession = useCallback(async (sessionId: string) => {
     try {
+      if (!sessionId) {
+        throw new Error("No session ID provided");
+      }
+
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
       setSessionId(sessionId);
       setIsLoading(true);
+      
+      console.log("Loading session:", sessionId, "for user:", user.id);
       
       // Verify session belongs to current user
       const { data: sessionData, error: sessionError } = await supabase
@@ -73,9 +91,17 @@ export function useChatWithGemini(agentId: string) {
         .eq("id", sessionId)
         .single();
         
-      if (sessionError) throw sessionError;
+      if (sessionError) {
+        console.error("Error fetching session:", sessionError);
+        throw new Error(`Failed to fetch session: ${sessionError.message}`);
+      }
       
-      if (sessionData.user_id !== user?.id) {
+      if (!sessionData) {
+        throw new Error("Session not found");
+      }
+      
+      if (sessionData.user_id !== user.id) {
+        console.error("Permission denied. Session user:", sessionData.user_id, "Current user:", user.id);
         throw new Error("You don't have permission to access this chat session");
       }
       
@@ -86,15 +112,20 @@ export function useChatWithGemini(agentId: string) {
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true });
         
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching messages:", error);
+        throw new Error(`Failed to fetch messages: ${error.message}`);
+      }
       
       const loadedMessages = data.map((msg) => ({
         role: msg.role as "user" | "assistant",
         content: msg.content
       }));
       
+      console.log("Loaded messages:", loadedMessages.length);
       setMessages(loadedMessages);
     } catch (error: any) {
+      console.error("Error in loadSession:", error);
       toast({
         title: "Error loading chat session",
         description: error.message,
@@ -158,7 +189,8 @@ export function useChatWithGemini(agentId: string) {
       const { data, error } = await supabase.functions.invoke("gemini-chat", {
         body: {
           messages: allMessages,
-          agentConfig
+          agentConfig,
+          apiKey: import.meta.env.VITE_GEMINI_API_KEY
         },
       });
 

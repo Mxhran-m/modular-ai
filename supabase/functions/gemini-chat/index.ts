@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -13,14 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    // Get the Gemini API key from environment variables
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not set");
-    }
-
     // Parse the request body
-    const { messages, agentConfig } = await req.json();
+    const { messages, agentConfig, apiKey } = await req.json();
+
+    if (!apiKey) {
+      throw new Error("No API key provided");
+    }
 
     if (!messages || !Array.isArray(messages)) {
       throw new Error("Invalid messages format: messages must be an array");
@@ -49,7 +46,7 @@ serve(async (req) => {
 
     // Make the API call to Gemini
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=" + GEMINI_API_KEY,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=" + apiKey,
       {
         method: "POST",
         headers: {

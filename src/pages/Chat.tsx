@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -29,18 +28,32 @@ const Chat = () => {
   // Fetch agent details and load existing session if provided
   useEffect(() => {
     const fetchAgent = async () => {
-      if (!id) return;
+      if (!id) {
+        console.error("No agent ID provided");
+        return;
+      }
 
       try {
+        console.log("Fetching agent:", id);
         const { data, error } = await supabase
           .from("agents")
           .select("*")
           .eq("id", id)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching agent:", error);
+          throw error;
+        }
+
+        if (!data) {
+          throw new Error("Agent not found");
+        }
+
+        console.log("Agent found:", data);
         setAgent(data);
       } catch (error: any) {
+        console.error("Error in fetchAgent:", error);
         toast({
           title: "Error fetching agent",
           description: error.message,
@@ -53,9 +66,33 @@ const Chat = () => {
 
     // Load existing chat session if session ID is provided
     if (sessionParam) {
-      loadSession(sessionParam);
+      // Validate session ID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(sessionParam)) {
+        console.error("Invalid session ID format:", sessionParam);
+        toast({
+          title: "Invalid Session",
+          description: "The chat session ID is not in the correct format. Starting a new chat instead.",
+          variant: "destructive",
+        });
+        // Clear the invalid session parameter
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.delete("session");
+        window.history.replaceState({}, "", `${window.location.pathname}?${newSearchParams.toString()}`);
+        return;
+      }
+
+      console.log("Loading existing session:", sessionParam);
+      loadSession(sessionParam).catch(error => {
+        console.error("Error loading session:", error);
+        toast({
+          title: "Error loading chat session",
+          description: error.message,
+          variant: "destructive",
+        });
+      });
     }
-  }, [id, sessionParam, toast, loadSession]);
+  }, [id, sessionParam, searchParams, toast, loadSession]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
